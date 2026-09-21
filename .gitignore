@@ -1,0 +1,42 @@
+# 這個 repo 只放 skill 本身（.claude/skills/video-autoedit/）與 README。
+# 其餘全部是素材、模型、中繼檔或個人內容，都不進版控。
+# 註：.gitignore 不支援行尾註解，註解一定要自己獨立一行。
+
+# ── 受訪者內容：逐字稿、校稿、剪輯決策 ──────────────────────
+# jobs/ 裡雖然多半是小檔，但包含受訪者說過的每一句話，開源不該一併公開。
+# 若之後要開私人 repo 保存剪輯決策，把下面這行改成白名單即可
+# （只留 edl.json、corrections-*.json、units.json、transcript*.md、templates/）。
+jobs/
+
+# ── 素材、模型、成品、環境 ─────────────────────────────────
+samples/
+models/
+output/
+logs/
+.venv/
+
+# ── 音樂庫 ────────────────────────────────────────────────
+# YouTube 音效庫的音樂只授權用在影片裡，不可以轉散布，所以不能進 repo。
+# index.tsv 是自己整理的曲目對照表，可以留著（下面有例外規則）。
+music/
+!music/index.tsv
+
+# ── 影音檔 ────────────────────────────────────────────────
+*.mp4
+*.mov
+*.mkv
+*.mts
+*.mp3
+*.m4a
+*.wav
+
+# 例外：skill 內建的片頭／章節／片尾音效（自己合成的，2.4 MB，
+# clone 完就能用；不想收也可以刪掉這行，改跑 make_stings.py 重新合成）
+!.claude/skills/video-autoedit/assets/audio/*.wav
+
+# ── Python ────────────────────────────────────────────────
+__pycache__/
+*.pyc
+
+# ── Claude Code 本機設定 ──────────────────────────────────
+.claude/settings.local.json

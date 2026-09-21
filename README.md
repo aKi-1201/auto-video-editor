@@ -1,0 +1,54 @@
+# auto-video-editor
+
+讓 Claude 自動剪輯以說話為主的影片（訪談、口播、教學），包裝成 Claude Code skill（`video-autoedit`）。
+在這個資料夾開 Claude Code，skill 會自動載入；把素材放進 `samples/`，說「幫我剪」即可。
+
+成品可直接發布：刪 NG 與長停頓、跳剪推鏡、空鏡、燒入字幕（另附 SRT）、標題／章節／人名條／金句字卡、
+配樂、降噪與響度標準化。
+
+## 流程
+
+```
+素材 ─▶ probe            登記素材、抽辨識音訊
+     ─▶ transcribe       Breeze-ASR／whisper（faster-whisper，CPU）→ 字級時間戳
+     ─▶ build_transcript 斷句、繁體化、編句子 ID → transcript.md
+     ─▶ audio_check      判斷收音品質 →（可選）denoise：DeepFilterNet3，只作用在成片
+     ─▶ Claude 校稿      corrections-*.json
+     ─▶ Claude 剪輯規劃  edl.json：保留哪些句子、章節、字卡、空鏡、配樂
+     ─▶ validate_edl     檢查 → 剪輯腳本.md
+     ─▶ cards            HTML 模板 → 無頭瀏覽器 → PNG
+     ─▶ captions         依標點斷行、對到成片時間
+     ─▶ render           逐段編碼 → 串接 → 音訊另外處理 → 燒字幕 → final.mp4
+```
+
+核心原則：**Claude 負責判斷，程式負責執行**。Claude 只引用句子 ID，不寫秒數。詳見 `SKILL.md`。
+
+## 需求
+
+- Python 3.12、ffmpeg（含 libass）、Chrome／Edge／Chromium、思源黑體與宋體
+- 辨識模型用 `setup_models.py` 下載（Breeze-ASR-25／26、whisper large-v3，各約 3 GB）
+- 顯卡編碼可選：AMD AMF、NVIDIA NVENC、Intel QSV、Apple VideoToolbox（沒有就用 CPU）
+
+安裝步驟見 `.claude/skills/video-autoedit/SKILL.md` 的「一次性設定」。
+
+## 目錄
+
+```
+.claude/skills/video-autoedit/
+├── SKILL.md          skill 主體：流程、校稿格式、品質檢查、踩過的坑
+├── scripts/          所有確定性的工作
+├── references/       EDL 規格、導演準則、字卡模板寫法
+└── assets/           共用字卡模板、合成的片頭／章節／片尾音效
+jobs/<job>/           每支影片的工作目錄           （不進版控）
+samples/  models/     素材、辨識模型               （不進版控）
+music/                自備曲庫與 index.tsv         （不進版控）
+output/               成品                         （不進版控）
+```
+
+## 已知限制
+
+- 配樂只能掛在字卡上，整段鋪底的背景音樂與講話時自動壓低（ducking）還沒做。
+- 辨識只走 CPU（約 1 倍即時）。GPU 方案只給句級時間戳，這套流程需要字級時間戳。
+- 剪輯單位是句子，加上自動刪長停頓；字級剪除（刪「嗯、那個」）尚未實作。
+- 多機位同步、說話者分離尚未實作。
+- 主要在 Windows + AMD 顯卡上驗證；macOS／Linux 已處理路徑與編碼器，但未實機測試。

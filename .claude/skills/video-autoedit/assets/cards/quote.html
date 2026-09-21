@@ -1,0 +1,26 @@
+<!doctype html>
+<!-- 金句（疊加）：影片畫面留在左側，右側出現文字面板。背景透明。
+     欄位：text speaker plate_width（面板寬，預設 860；避開人臉時可調窄） -->
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="base.css">
+<style>
+.card { background: transparent; display: flex; justify-content: flex-end; }
+.plate { box-sizing: border-box; height: 1080px; padding: 120px 96px 120px 88px; display: flex; flex-direction: column; justify-content: center; gap: 44px; background: var(--bg); color: var(--ink); }
+.mark { font-weight: 900; font-size: 160px; line-height: 0.6; color: var(--accent); }
+p { margin: 0; font-weight: 700; font-size: 64px; line-height: 1.55; }
+.by { display: flex; align-items: center; gap: 20px; font-size: 30px; }
+.by .rule { width: 56px; height: 3px; background: var(--accent); flex: none; }
+</style>
+</head>
+<body>
+<div class="card" style="{{theme_vars}}">
+  <div class="plate" style="width: {{plate_width}}px;">
+    <div class="mark serif">「</div>
+    <p class="serif">{{text}}</p>
+    <div class="by muted"><div class="rule"></div><div>{{speaker}}</div></div>
+  </div>
+</div>
+</body>
+</html>

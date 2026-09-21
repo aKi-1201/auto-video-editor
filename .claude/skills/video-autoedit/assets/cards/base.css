@@ -1,0 +1,22 @@
+/* 字卡共用樣式：「紙本印記」。顏色由 cards.py 依主題注入 --bg --ink --muted --rule --accent。 */
+html, body {
+  margin: 0;
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+  background: transparent;
+}
+.card {
+  width: 1920px;
+  height: 1080px;
+  box-sizing: border-box;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+}
+.serif { font-family: "Noto Serif TC", "PMingLiU", serif; }
+.seal { background: var(--accent); flex: none; }
+.muted { color: var(--muted); }
+.label { letter-spacing: 0.24em; }
+/* 沒填的欄位整個隱藏 */
+.opt:empty { display: none; }

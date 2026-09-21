@@ -1,0 +1,24 @@
+<!doctype html>
+<!-- 人名條（疊加），背景透明。欄位：name title -->
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="base.css">
+<style>
+.card { background: transparent; position: relative; }
+.plate { position: absolute; left: 160px; bottom: 196px; display: flex; flex-direction: column; gap: 10px; padding: 28px 44px 30px 36px; background: var(--bg); color: var(--ink); }
+.row { display: flex; align-items: center; gap: 18px; }
+.row .seal { width: 18px; height: 18px; }
+.name { font-weight: 900; font-size: 52px; line-height: 1.2; }
+.title { padding-left: 36px; font-size: 28px; font-weight: 500; letter-spacing: 0.06em; }
+</style>
+</head>
+<body>
+<div class="card" style="{{theme_vars}}">
+  <div class="plate">
+    <div class="row"><div class="seal"></div><div class="name serif">{{name}}</div></div>
+    <div class="title muted opt">{{title}}</div>
+  </div>
+</div>
+</body>
+</html>

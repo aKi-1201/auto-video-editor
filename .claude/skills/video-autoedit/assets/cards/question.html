@@ -1,0 +1,24 @@
+<!doctype html>
+<!-- 問題字卡。欄位：mark（預設「問」） number（如 Q.03） text -->
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="base.css">
+<style>
+.card { padding: 120px 240px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 64px; }
+.head { display: flex; flex-direction: column; align-items: center; gap: 24px; }
+.mark { width: 128px; height: 128px; display: flex; align-items: center; justify-content: center; color: var(--bg); font-weight: 900; font-size: 84px; line-height: 1; }
+.num { font-size: 28px; letter-spacing: 0.24em; }
+p { margin: 0; max-width: 1440px; text-align: center; font-weight: 700; font-size: 76px; line-height: 1.55; }
+</style>
+</head>
+<body>
+<div class="card" style="{{theme_vars}}">
+  <div class="head">
+    <div class="mark seal serif">{{mark}}</div>
+    <div class="num muted opt">{{number}}</div>
+  </div>
+  <p class="serif">{{text}}</p>
+</div>
+</body>
+</html>

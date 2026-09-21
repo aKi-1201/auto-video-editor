@@ -1,0 +1,33 @@
+<!doctype html>
+<!-- 片尾卡。欄位：series thanks（預設「感謝收看」） next（下集預告，可空） credits（「職稱：姓名」一行一筆，可空） footer -->
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="base.css">
+<style>
+.card { padding: 120px 160px; display: flex; flex-direction: column; justify-content: space-between; }
+.brand { display: flex; align-items: center; gap: 20px; font-size: 30px; font-weight: 500; }
+.brand .seal { width: 44px; height: 44px; }
+.middle { display: flex; flex-direction: column; gap: 40px; }
+.thanks { font-weight: 900; font-size: 120px; line-height: 1.2; }
+.next { display: flex; align-items: center; gap: 28px; font-size: 40px; }
+.next .rule { width: 120px; height: 4px; background: var(--accent); flex: none; }
+.credits { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 80px; row-gap: 40px; }
+.credit { display: flex; flex-direction: column; gap: 12px; }
+.credit .role { font-size: 26px; letter-spacing: 0.3em; }
+.credit .name { font-weight: 700; font-size: 44px; }
+.foot { font-size: 28px; letter-spacing: 0.12em; }
+</style>
+</head>
+<body>
+<div class="card" style="{{theme_vars}}">
+  <div class="brand"><div class="seal"></div><div class="label">{{series}}</div></div>
+  <div class="middle">
+    <div class="thanks serif">{{thanks}}</div>
+    <div class="next opt-wrap">{{next_html}}</div>
+  </div>
+  <div class="credits">{{credits_html}}</div>
+  <div class="foot muted opt">{{footer}}</div>
+</div>
+</body>
+</html>

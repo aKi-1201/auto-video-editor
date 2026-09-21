@@ -1,0 +1,33 @@
+<!doctype html>
+<!-- 片頭標題卡。欄位：series episode title kicker byline date place -->
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="base.css">
+<style>
+.card { padding: 120px 160px; display: flex; flex-direction: column; justify-content: space-between; }
+.top { display: flex; justify-content: space-between; align-items: center; }
+.brand { display: flex; align-items: center; gap: 20px; font-size: 30px; font-weight: 500; }
+.brand .seal { width: 44px; height: 44px; }
+.episode { font-size: 30px; font-weight: 500; letter-spacing: 0.12em; }
+.main { display: flex; flex-direction: column; gap: 56px; }
+h1 { margin: 0; max-width: 1400px; font-weight: 900; font-size: 128px; line-height: 1.25; letter-spacing: 0.04em; }
+.kicker { display: flex; align-items: center; gap: 32px; font-size: 38px; }
+.kicker .rule { width: 120px; height: 4px; background: var(--accent); flex: none; }
+.foot { display: flex; justify-content: space-between; font-size: 28px; letter-spacing: 0.12em; }
+</style>
+</head>
+<body>
+<div class="card" style="{{theme_vars}}">
+  <div class="top">
+    <div class="brand"><div class="seal"></div><div class="label">{{series}}</div></div>
+    <div class="episode muted opt">{{episode}}</div>
+  </div>
+  <div class="main">
+    <h1 class="serif">{{title}}</h1>
+    <div class="kicker"><div class="rule"></div><div class="serif">{{kicker}}</div><div class="muted opt">{{byline}}</div></div>
+  </div>
+  <div class="foot muted"><div class="opt">{{date}}</div><div class="opt">{{place}}</div></div>
+</div>
+</body>
+</html>

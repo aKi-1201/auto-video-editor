@@ -1,0 +1,28 @@
+<!doctype html>
+<!-- 章節卡。欄位：number（如 01） label（如 第一段） title note -->
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="base.css">
+<style>
+.card { padding: 120px 160px; display: flex; align-items: center; gap: 96px; }
+.num { font-weight: 900; font-size: 400px; line-height: 1; letter-spacing: -0.02em; color: var(--accent); }
+.bar { width: 2px; height: 360px; background: var(--rule); flex: none; }
+.text { display: flex; flex-direction: column; gap: 32px; }
+.text .label { font-size: 30px; letter-spacing: 0.3em; }
+h2 { margin: 0; font-weight: 900; font-size: 104px; line-height: 1.25; }
+.note { max-width: 900px; font-size: 38px; line-height: 1.6; }
+</style>
+</head>
+<body>
+<div class="card" style="{{theme_vars}}">
+  <div class="num serif">{{number}}</div>
+  <div class="bar"></div>
+  <div class="text">
+    <div class="label muted opt">{{label}}</div>
+    <h2 class="serif">{{title}}</h2>
+    <div class="note muted opt">{{note}}</div>
+  </div>
+</div>
+</body>
+</html>
