@@ -18,6 +18,7 @@ import argparse
 import hashlib
 import json
 import shutil
+import struct
 import subprocess
 import sys
 import wave
@@ -32,8 +33,9 @@ from common import fmt_ts, load_sources, load_units, read_json, write_json
 DEFAULT_OUTPUT = {
     # 預設升採樣到 1440p：升採樣不會增加細節，但 YouTube 對 1440p 以上的上傳
     # 會用 VP9／AV1 並分到較高位元率，觀眾看到的壓縮痕跡比較少。代價是檔案約 1.7 倍。
-    # 編碼用 H.264：到哪都能播（HEVC 在 Windows 要另裝擴充功能）；YouTube 反正會重新編碼。
-    "width": 2560, "height": 1440, "codec": "h264", "fps": "30000/1001", "loudness_lufs": -14,
+    # 編碼用 HEVC：同畫質位元率比 H.264 少約三成，補回顯卡編碼損失的效率，YouTube 也直接收。
+    # 要在活動現場或別人的電腦播放時改 h264（HEVC 在 Windows 要另裝擴充功能）。
+    "width": 2560, "height": 1440, "codec": "hevc", "fps": "30000/1001", "loudness_lufs": -14,
     # 同一支素材跳剪時交替放大，遮掩畫面跳動；center 是放大中心（0～1，依人物位置調整）
     "punch_in": {"zoom": 1.12, "center": [0.5, 0.45]},
     # 超過 max 秒的停頓縮成約 keep 秒。keep_after 要夠長：靜音偵測常把字尾的尾音
@@ -761,8 +763,11 @@ def finish(job: Path, timeline: dict, body: Path, preview: bool, gpu_final: bool
     if preview:
         venc = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "24"]
     elif gpu_final and gpu_encoder(out.get("codec", "h264")):
-        # 顯卡編碼：速度快很多，同畫質下檔案略大
-        venc = gpu_encoder(out.get("codec", "h264"), 22 if out.get("codec") == "hevc" else 20)
+        # 顯卡編碼：速度快很多，但同畫質要多約四成位元率。HEVC 用 qp 19：上傳 YouTube 的檔案
+        # 要比它重新編碼後的畫質高出一截，壓縮瑕疵才不會被再壓一次（約 1440p30 建議值的位元率）
+        venc = gpu_encoder(out.get("codec", "h264"), 19 if out.get("codec") == "hevc" else 20)
+    elif out.get("codec") == "hevc":
+        venc = ["-c:v", "libx265", "-preset", "medium", "-crf", "20", "-tag:v", "hvc1"]
     else:
         venc = ["-c:v", "libx264", "-preset", "medium", "-crf", "19", "-profile:v", "high"]
     cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-stats", "-stats_period", "60", "-y",
@@ -810,6 +815,12 @@ def main() -> None:
         prepare(args.job, sorted({it["source"] for it in edl["timeline"] if it["type"] == "clip"}))
 
     timeline = plan(args.job, edl, cards)
+    # 字卡是照成片尺寸截圖的：中途改了解析度卻沒重跑 cards.py，字卡會被縮放、變糊
+    height = timeline["output"]["height"]
+    wrong = sorted({png for png in cards.values()
+                    if struct.unpack(">I", (args.job / png).open("rb").read(24)[20:24])[0] != height})
+    if wrong:
+        sys.exit(f"字卡圖片不是 {height}p（例如 {wrong[0]}）：輸出解析度改過了，請先重跑 cards.py")
     clips = [p for p in timeline["pieces"] if p["type"] == "clip"]
     print(f"成片長度 {fmt_ts(timeline['duration'])}，{len(timeline['pieces'])} 段"
           f"（影片 {len(clips)}、字卡 {len(timeline['pieces']) - len(clips)}），"

@@ -37,24 +37,26 @@ $PY S/make_stings.py                              # 合成片頭／章節／片�
 
 以 `jobs/<job>/` 為工作目錄，每一步的產物都是檔案，可單獨重跑。
 
-1. **登記素材** `S/probe.py <影片...> --job jobs/<job>`。注意 VFR 警告；訪談放前、空鏡放後，補素材時編號才不會變。
+1. **確認用途**：影片要上傳 YouTube，還是在活動現場放映？使用者沒講就先問。它決定輸出規格（見「輸出」），
+   寫進 `edl.json` 的 `output` 後就不再改：試剪給使用者看的版本，就是最後交付的版本。
+2. **登記素材** `S/probe.py <影片...> --job jobs/<job>`。注意 VFR 警告；訪談放前、空鏡放後，補素材時編號才不會變。
    長錄影只用其中幾段時寫成 `"路徑#00:12:00-00:18:30"`，只切出那段，辨識快很多。
-2. **語音辨識** `S/transcribe.py --job jobs/<job> --model breeze-25 --prompt "<人名、地名、專有名詞>"`（放背景）
+3. **語音辨識** `S/transcribe.py --job jobs/<job> --model breeze-25 --prompt "<人名、地名、專有名詞>"`（放背景）
    - 華語用 `breeze-25`；台語或口音重用 `breeze-26`；拿不準就兩個各跑一小段比較。
    - `--prompt` 能改善專有名詞，但偶爾會被抄進逐字稿開頭，校稿時刪掉。空鏡用 `--sources` 排除。
    - 聽不清的關鍵句用另一個模型比對：`--model large-v3 --sources A003 --window 起 迄`（只印出、不寫檔）。
      兩邊不一致時回報使用者並附上兩種辨識結果。
-3. **逐字稿** `S/build_transcript.py --job jobs/<job> --model <同上>`，讀完整份 `transcript.md` 再動手。
-4. **看畫面**：每支素材抽幾格，決定推鏡中心與字卡面板放哪。推鏡會放大約 12%，
+4. **逐字稿** `S/build_transcript.py --job jobs/<job> --model <同上>`，讀完整份 `transcript.md` 再動手。
+5. **看畫面**：每支素材抽幾格，決定推鏡中心與字卡面板放哪。推鏡會放大約 12%，
    人站在畫面邊緣、或畫面上有燒上去的字幕／logo 的素材設 `punch_in: false`。
-5. **校稿** → `corrections-*.json`，涵蓋所有會保留的句子。
-6. **剪輯規劃** → `edl.json`（規格 `references/edl-schema.md`，準則 `references/directing.md`）。
-7. **檢查** `S/validate_edl.py --job jobs/<job>` → `剪輯腳本.md`。使用者要先看腳本就停在這裡。
-8. **字卡** `S/cards.py --job jobs/<job>`，拼成總覽圖看過。
-9. **時間軸與字幕** `S/render.py --job jobs/<job> --plan-only`，再 `S/captions.py --job jobs/<job>`。
-   一兩個字自成一條、以「的」開頭的字幕，代表要把邊界字移到隔壁句。
-10. **渲染** `S/render.py --job jobs/<job>`（放背景）→ `final.mp4`、`final.srt`。片段有快取，只改字幕時只重跑合成。
-11. **品質檢查** `S/qc.py --job jobs/<job>`，處理完才回報（見「品質檢查」）。
+6. **校稿** → `corrections-*.json`，涵蓋所有會保留的句子。
+7. **剪輯規劃** → `edl.json`（規格 `references/edl-schema.md`，準則 `references/directing.md`）。
+8. **檢查** `S/validate_edl.py --job jobs/<job>` → `剪輯腳本.md`。使用者要先看腳本就停在這裡。
+9. **字卡** `S/cards.py --job jobs/<job>`，拼成總覽圖看過。
+10. **時間軸與字幕** `S/render.py --job jobs/<job> --plan-only`，再 `S/captions.py --job jobs/<job>`。
+    一兩個字自成一條、以「的」開頭的字幕，代表要把邊界字移到隔壁句。
+11. **渲染** `S/render.py --job jobs/<job>`（放背景）→ `final.mp4`、`final.srt`。片段有快取，只改字幕時只重跑合成。
+12. **品質檢查** `S/qc.py --job jobs/<job>`，處理完才回報（見「品質檢查」）。
 
 ## 校稿
 
@@ -106,10 +108,15 @@ $PY S/make_stings.py                              # 合成片頭／章節／片�
 
 ## 輸出
 
-預設 2560×1440 H.264、顯卡編碼；素材比 1440p 大時跟著素材走。升採樣不增加細節，
-但 YouTube 對 1440p 以上的上傳分配較高位元率。現場放映或給別人的電腦播放時設 1920×1080；
-H.264 到哪都能播，HEVC 在 Windows 要另裝擴充功能。顯卡比 CPU 快一個數量級，代價是同畫質位元率多約四成；
-要留存檔母帶用 `--cpu-final`。
+規格依用途在開工時決定（流程第 1 步），寫在 `edl.json` 的 `output`：
+
+- **上傳 YouTube（預設）**：2560×1440 HEVC。升採樣不增加細節，但 YouTube 對 1440p 以上的上傳改用
+  VP9／AV1 並分配較高位元率，觀眾用 1080p 看也比較清楚。素材比 1440p 大時跟著素材走。
+- **現場放映、給別人的電腦播放**：`"width": 1920, "height": 1080, "codec": "h264"`，到哪都能播
+  （HEVC 在 Windows 要另裝擴充功能）。
+
+中途改解析度要重跑 `cards.py`（字卡是照成片尺寸產生的，render 會檢查）。顯卡編碼比 CPU 快一個數量級，
+代價是同畫質要多約四成位元率，所以 HEVC 用較低的 QP 補回來；要留存檔母帶用 `--cpu-final`。
 
 ## 音訊
 
