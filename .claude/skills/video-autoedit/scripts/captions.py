@@ -183,6 +183,10 @@ def main() -> None:
         # 把這個片段內各句的文字串成連續字流（每字帶時間與樣式），
         # 再依句末標點、長停頓、樣式變化重新斷句——字幕不受逐字稿切句位置影響
         ids = order[item["source"]]
+        kept = [p for p in pieces if p["type"] == "clip" and p["item"] == idx]
+        if not kept:
+            continue
+        lo, hi = min(p["src_start"] for p in kept), max(p["src_end"] for p in kept)
         stream = []
         for uid in ids[ids.index(item["from"]): ids.index(item["to"]) + 1]:
             u = units[uid]
@@ -190,7 +194,14 @@ def main() -> None:
             text, style = (fix.get("text", u["raw"]), fix.get("style", "default")) if isinstance(fix, dict) else (fix, "default")
             if not text:
                 continue
-            times = align_times(u["raw"], char_times(u), text, u["start"], u["end"])
+            # nudge 裁掉的頭尾不拿來對齊：校稿只寫保留下來的部分時，拿整句比對會相似度太低、
+            # 或對到被裁掉的那個同樣的詞
+            raw, ctimes, start, end = u["raw"], char_times(u), u["start"], u["end"]
+            inside = [i for i, (a, b) in enumerate(ctimes[:len(raw)]) if lo <= (a + b) / 2 <= hi]
+            if inside and len(inside) < len(raw):
+                a, b = inside[0], inside[-1] + 1
+                raw, ctimes, start, end = raw[a:b], ctimes[a:b], max(start, lo), min(end, hi)
+            times = align_times(raw, ctimes, text, start, end)
             for c, (t0, t1) in zip(text, times):
                 # 直接換算成成片時間：刪掉的停頓不再造成斷句
                 o0 = map_time(pieces, item["source"], t0, idx)

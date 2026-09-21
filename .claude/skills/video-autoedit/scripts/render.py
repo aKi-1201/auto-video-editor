@@ -6,10 +6,11 @@
     python render.py --job jobs/<job>               # 成片 final.mp4
 
 步驟:
+    0. audio   各素材降噪、音量對齊（prep_audio.py；缺的或過期的會自動補做）
     1. plan    句子 ID → 素材秒數；切點對齊靜音；刪掉過長停頓；決定跳剪時的推鏡
     2. pieces  每一小段各自重新編碼成中繼檔（固定幀率、統一格式，可快取重用）
     3. concat  串接成 body.mov
-    4. finish  疊加字卡、燒入字幕、音訊處理（降噪、音量平衡、響度標準化）
+    4. finish  燒入字幕、混配樂、響度標準化
 
 先跑過 cards.py（字卡 PNG）與 captions.py（字幕），finish 才會帶上它們。
 """
@@ -29,10 +30,11 @@ import numpy as np
 from common import fmt_ts, load_sources, load_units, read_json, write_json
 
 DEFAULT_OUTPUT = {
-    # 預設升採樣到 1440p H.265：升採樣不會增加細節，但 YouTube 對 1440p 以上的上傳
+    # 預設升採樣到 1440p：升採樣不會增加細節，但 YouTube 對 1440p 以上的上傳
     # 會用 VP9／AV1 並分到較高位元率，觀眾看到的壓縮痕跡比較少。代價是檔案約 1.7 倍。
-    "width": 2560, "height": 1440, "codec": "hevc", "fps": "30000/1001", "loudness_lufs": -14,
-    # 跳剪時交替放大，遮掩畫面跳動；center 是放大中心（0～1，依人物位置調整）
+    # 編碼用 H.264：到哪都能播（HEVC 在 Windows 要另裝擴充功能）；YouTube 反正會重新編碼。
+    "width": 2560, "height": 1440, "codec": "h264", "fps": "30000/1001", "loudness_lufs": -14,
+    # 同一支素材跳剪時交替放大，遮掩畫面跳動；center 是放大中心（0～1，依人物位置調整）
     "punch_in": {"zoom": 1.12, "center": [0.5, 0.45]},
     # 超過 max 秒的停頓縮成約 keep 秒。keep_after 要夠長：靜音偵測常把字尾的尾音
     # 當成已經沒聲音，切太前面會把最後一個字吃掉，講話就變得不流暢
@@ -166,8 +168,9 @@ def plan(job: Path, edl: dict, cards: dict) -> dict:
         # 刪長停頓：把區間切成數段
         spans, cur = [], a
         if item.get("tighten", True):
+            words = [(w["start"], w["end"]) for u in seq[first:last + 1] for w in u["words"]]
             for g0, g1 in sil.gaps(a, b, pause["max"]):
-                cut0, cut1 = g0 + pause["keep_after"], g1 - pause["keep_before"]
+                cut0, cut1 = protect_words(g0 + pause["keep_after"], g1 - pause["keep_before"], words)
                 if cut1 - cut0 > 0.2 and cut0 - cur >= MIN_SHOT:
                     spans.append((cur, cut0))
                     cur = cut1
@@ -188,15 +191,17 @@ def plan(job: Path, edl: dict, cards: dict) -> dict:
 
         for s0, s1 in spans:
             if prev is not None:
-                jump = s0 - prev["src_end"] if prev["source"] == sid else 99
-                if jump >= BIG_JUMP or (prev["item"] != idx and abs(jump) > 0.05):
-                    zoom ^= 1
-            # punch_in: false 的片段永遠不推鏡（畫面本身就有燒死的字幕／字卡時，
-            # 推鏡會把下緣裁掉）
+                if prev["source"] != sid:
+                    zoom = 0          # 換素材（換機位）本身就不是跳剪，不用放大去遮
+                else:
+                    jump = s0 - prev["src_end"]
+                    if jump >= BIG_JUMP or (prev["item"] != idx and abs(jump) > 0.05):
+                        zoom ^= 1
+            # punch_in: false 的片段永遠不推鏡（畫面上有燒死的字幕／logo、人站在邊緣時會被裁掉）
             piece = {"type": "clip", "item": idx, "source": sid, "src_start": s0,
                      "zoom": zoom if item.get("punch_in", True) else 0}
-            if (job / "denoised" / f"{sid}.wav").exists():
-                piece["audio"] = f"denoised/{sid}.wav"
+            if (job / "prepared" / f"{sid}.wav").exists():
+                piece["audio"] = f"prepared/{sid}.wav"
             w = next((w for w in windows if w["start"] - 0.01 <= s0 < w["end"]), None)
             if w and s1 - s0 >= 0.2:
                 # 空鏡素材的起點要扣掉這段之前已經播掉的時間（停頓被刪掉時也算）
@@ -213,6 +218,12 @@ def plan(job: Path, edl: dict, cards: dict) -> dict:
                                         "window": round(g["end"] - g["start"], 3)}
             add(piece, s1 - s0)
             prev = piece
+
+    # 兩段空鏡首尾相接時，圖和圖之間直接切換：各自溶接的話會先淡回底下的訪談畫面再淡出，
+    # 中間閃一下不到一秒的訪談
+    for p, q in zip(pieces, pieces[1:]):
+        if "broll" in p and "broll" in q and abs(p["out_end"] - q["out_start"]) < 1e-6:
+            p["broll"]["cut_out"] = q["broll"]["cut_in"] = True
 
     # 疊加字卡的時間：at 句開始時出現，不跨進全畫面字卡
     overlays = []
@@ -289,6 +300,22 @@ def snap_windows(windows: list, spans: list, a: float, b: float) -> None:
     for w, nxt in zip(windows, windows[1:]):
         if nxt["start"] - w["end"] < MIN_SHOT:   # 兩段空鏡之間的訪談太短，直接接上
             w["end"] = nxt["start"]
+
+
+def protect_words(cut0: float, cut1: float, words: list) -> tuple:
+    """刪停頓不能切進任何一個字。
+
+    靜音偵測會把很輕的字尾（遠距收音、講者收尾變小聲）當成靜音；只看音量刪，
+    就會把整個字刪掉。跟辨識的字級時間比對，碰到字就把刪除區間縮回字的外面。
+    """
+    mid = (cut0 + cut1) / 2
+    for ws, we in words:
+        if we > cut0 and ws < cut1:
+            if ws < mid:
+                cut0 = max(cut0, we + 0.05)
+            else:
+                cut1 = min(cut1, ws - 0.05)
+    return cut0, cut1
 
 
 def split_span(span: tuple, x0: float, x1: float) -> list:
@@ -376,12 +403,12 @@ def piece_cmd(p: dict, src: dict, out: dict, path: Path, job: Path, gpu: bool = 
                f"setsar=1,tpad=stop_mode=clone:stop_duration=1,trim=end_frame={p['frames']}")
         inputs = ["-ss", f"{br['in']:.4f}", "-t", f"{float(dur) + 1:.3f}", "-i", br["path"],
                   "-ss", f"{p['src_start']:.4f}", "-t", f"{float(dur) + 1:.3f}", "-i", src["path"]]
-        # 進出空鏡用溶接：硬切在訪談片裡太跳，也讓觀眾知道畫面換了
+        # 進出空鏡用溶接：硬切在訪談片裡太跳，也讓觀眾知道畫面換了（空鏡接空鏡則直接切）
         fades = []
-        if br.get("played", 0) < 0.01:
+        if br.get("played", 0) < 0.01 and not br.get("cut_in"):
             fades.append(f"fade=t=in:st=0:d={DISSOLVE}:alpha=1")
         out_at = br.get("window", 0) - br.get("played", 0) - DISSOLVE
-        if br.get("window") and out_at < float(dur) + 0.01:
+        if br.get("window") and out_at < float(dur) + 0.01 and not br.get("cut_out"):
             fades.append(f"fade=t=out:st={max(out_at, 0):.2f}:d={DISSOLVE}:alpha=1")
         if fades:
             graph = (f"[0:v]{bvf},format=rgba,{','.join(fades)}[bov];[1:v]{vf}[bg];"
@@ -394,7 +421,7 @@ def piece_cmd(p: dict, src: dict, out: dict, path: Path, job: Path, gpu: bool = 
         graph = f"[0:v]{vf}[base];[0:a]{af}[a]"
         png_idx = 1
     if p.get("audio"):
-        # 這支素材有降噪過的音軌（denoise.py），聲音改從它取，影像不變
+        # 聲音取自整理過的音軌（prep_audio.py：降噪、音量對齊），影像不變
         inputs += ["-ss", f"{p['src_start']:.4f}", "-t", f"{float(dur) + 1:.3f}",
                    "-i", str((job / p["audio"]).resolve())]
         graph = graph.replace(f"[{png_idx - 1}:a]", f"[{png_idx}:a]")
@@ -494,7 +521,6 @@ def concat(job: Path, paths: list, timeline: dict = None) -> Path:
     return body
 
 
-AUDIO_CLEAN = "highpass=f=70,afftdn=nr=8:tn=1"
 # 注意：不要用 dynaudnorm，它和影像一起處理時會把開頭幾秒的音訊丟掉（片頭配樂因此消失）
 
 
@@ -506,23 +532,19 @@ def measure_loudness(body: Path, chain: str, target: float) -> dict:
     return json.loads(text[text.rindex("{"): text.rindex("}") + 1])
 
 
-def speech_chain(body: Path, target: float, denoised: bool = False) -> tuple:
-    """人聲處理，回傳 (混音前的處理, 混音後的響度標準化)。
+def speech_chain(body: Path, target: float) -> tuple:
+    """人聲處理，回傳 (混音前的處理, 混音後的響度增益 dB)。降噪與各素材音量對齊已在 prep_audio 做完。
 
     響度標準化一定要放在混音之後：loudnorm 有數秒的前瞻緩衝，而 amix 是依到達順序混音，
     放在混音前會把配樂整整往後推兩秒（字卡的音效因此對不上）。
     """
-    # 片段已經用 DeepFilterNet 降過噪就不要再套 afftdn，疊兩層頻譜降噪容易讓人聲發空
-    clean = "highpass=f=70" if denoised else AUDIO_CLEAN
-    raw = measure_loudness(body, clean, target)
+    raw = measure_loudness(body, "anull", target)
     gain = min(max(-20 - float(raw["input_i"]), -10), 30)
-    comp = (f"{clean},volume={gain:.2f}dB,"
-            f"acompressor=threshold=0.063:ratio=2.5:attack=15:release=250:knee=4")
+    comp = f"volume={gain:.2f}dB,acompressor=threshold=0.063:ratio=2.5:attack=15:release=250:knee=4"
     m = measure_loudness(body, comp, target)
     # 不要用 loudnorm 濾鏡做最後的標準化：它會把取樣率拉到 192 kHz，時間戳還會出現空洞，
     # 播放時聲音跳過去、畫面追趕，看起來像被快轉。linear 模式本來就只是固定增益，直接用 volume。
-    gain = target - float(m["input_i"]) + float(m["target_offset"])
-    return comp, f"volume={gain:.2f}dB"
+    return comp, target - float(m["input_i"]) + float(m["target_offset"])
 
 
 AUDIO_ASSETS = Path(__file__).resolve().parent.parent / "assets" / "audio"
@@ -695,22 +717,24 @@ def finish(job: Path, timeline: dict, body: Path, preview: bool, gpu_final: bool
     ensure_fonts(job)
     out = timeline["output"]
     fps = out["fps"]
-    denoised = all(p.get("audio") for p in timeline["pieces"] if p["type"] == "clip")
-    speech, loudness = speech_chain(body, out["loudness_lufs"], denoised)
+    speech, gain = speech_chain(body, out["loudness_lufs"])
 
     # 第一步：只做音訊
     inputs, graph = ["-i", body.name], [f"[0:a]{speech},aresample={SR}[speech]"]
     bed = build_music_bed(job, timeline, body)
+    music_eq = "highpass=f=120,lowpass=f=7000"
     if bed:
-        # 配樂：一條與成片等長的音軌，不經過人聲的降噪與壓縮
+        # 配樂：一條與成片等長的音軌，不經過人聲的壓縮
         inputs += ["-i", bed.name]
-        graph.append(f"[1:a]aresample={SR},aformat=channel_layouts=stereo,"
-                     f"highpass=f=120,lowpass=f=7000[music]")
+        graph.append(f"[1:a]aresample={SR},aformat=channel_layouts=stereo,{music_eq}[music]")
         graph.append("[speech][music]amix=inputs=2:normalize=0:duration=first[mixed]")
     else:
         graph.append("[speech]anull[mixed]")
     # 響度標準化放在混音之後（放在前面會讓配樂慢兩秒）
-    graph.append(f"[mixed]{loudness},alimiter=limit=0.89:level=false,aresample={SR}[aout]")
+    graph.append(f"[mixed]volume={gain:.2f}dB,alimiter=limit=0.89:level=false,aresample={SR}[aout]")
+    # 記下各段增益，qc.py 用來算配樂在成片裡比人聲低多少
+    write_json(job / "audio_levels.json", {"speech_chain": speech, "final_gain_db": round(gain, 2),
+                                          "music_eq": music_eq if bed else None})
     wav = "audio_final.wav"
     subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", *inputs,
                     "-filter_complex", ";".join(graph), "-map", "[aout]",
@@ -726,7 +750,7 @@ def finish(job: Path, timeline: dict, body: Path, preview: bool, gpu_final: bool
                               "-show_entries", "stream=nb_read_packets", "-of", "csv=p=0",
                               str(body)], capture_output=True, text=True).stdout.strip() or 0)
     if got != want:
-        sys.exit(f"body.mov 有 {got} 幀，時間軸卻是 {want} 幀，不能依幀序號重釘時間戳")
+        sys.exit(f"body.mov 有 {got} 幀，時間軸卻是 {want} 幀：串接有缺口，成片會影音不同步")
     vf = [f"fps={fps}"]
     if (job / "captions.ass").exists():
         vf.append("subtitles=filename=captions.ass:fontsdir=fonts")
@@ -758,7 +782,6 @@ def main() -> None:
     parser.add_argument("--preview", action="store_true")
     parser.add_argument("--workers", type=int, default=3)
     parser.add_argument("--no-gpu", action="store_true", help="中繼片段改用 CPU 編碼（預設有顯卡編碼器就用顯卡）")
-    parser.add_argument("--gpu-final", action="store_true", help="（已是預設）成片用顯卡編碼")
     parser.add_argument("--cpu-final", action="store_true",
                         help="成片改用 CPU 編碼：慢很多，但同畫質下位元率少約四成，適合存檔母帶")
     args = parser.parse_args()
@@ -781,6 +804,10 @@ def main() -> None:
              if sigs.get((kind, idx)) != card_sig(name, fields)]
     if stale:
         sys.exit("字卡圖片和 edl.json 對不上，請先重跑 cards.py：" + "、".join(stale))
+    if not args.plan_only:
+        # 各素材的降噪與音量對齊；已經是最新的會直接略過
+        from prep_audio import prepare
+        prepare(args.job, sorted({it["source"] for it in edl["timeline"] if it["type"] == "clip"}))
 
     timeline = plan(args.job, edl, cards)
     clips = [p for p in timeline["pieces"] if p["type"] == "clip"]

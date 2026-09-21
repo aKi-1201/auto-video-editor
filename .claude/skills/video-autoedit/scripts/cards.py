@@ -131,8 +131,11 @@ def main() -> None:
         sys.exit("找不到 Chrome／Edge／Chromium，無法轉出字卡")
     edl = read_json(args.job / "edl.json")
     style = edl.get("style", {})
-    # 模板是 1920x1080 的版面；輸出更高解析度時用瀏覽器縮放，文字才不會糊
-    scale = edl.get("output", {}).get("height", 1080) / 1080
+    # 模板是 1920x1080 的版面；成片是多大就用瀏覽器縮放到多大，文字才不會糊。
+    # 成片尺寸要和 render.py 用同一套規則算（預設 1440p、素材更大時跟著素材）
+    from render import DEFAULT_OUTPUT, canvas
+    sources = {s["id"]: s for s in read_json(args.job / "sources.json")["sources"]}
+    scale = {**DEFAULT_OUTPUT, **canvas(sources, edl), **edl.get("output", {})}["height"] / 1080
     out_dir = args.job / "cards"
     html_dir = out_dir / "_html"
     html_dir.mkdir(parents=True, exist_ok=True)
@@ -151,8 +154,9 @@ def main() -> None:
             screenshot(browser, page, png, profile, scale)
             manifest.append({"kind": kind, "index": idx, "template": name, "sig": card_sig(name, fields),
                              "png": str(png.relative_to(args.job))})
+            # 每張都立刻寫進清單：中途被中斷時，render.py 才看得出哪幾張還沒更新
+            write_json(out_dir / "cards.json", manifest)
             print(f"{stem}.png", flush=True)
-    write_json(out_dir / "cards.json", manifest)
 
 
 if __name__ == "__main__":

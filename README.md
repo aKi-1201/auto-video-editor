@@ -3,22 +3,22 @@
 讓 Claude 自動剪輯以說話為主的影片（訪談、口播、教學），包裝成 Claude Code skill（`video-autoedit`）。
 在這個資料夾開 Claude Code，skill 會自動載入；把素材放進 `samples/`，說「幫我剪」即可。
 
-成品可直接發布：刪 NG 與長停頓、跳剪推鏡、空鏡、燒入字幕（另附 SRT）、標題／章節／人名條／金句字卡、
-配樂、降噪與響度標準化。
+成品可直接發布或放映：刪 NG 與長停頓、跳剪推鏡、空鏡（含投影片／照片）、燒入字幕（另附 SRT）、
+標題／章節／人名條／金句字卡、字卡音效與鋪底配樂、降噪與音量平衡。
 
 ## 流程
 
 ```
-素材 ─▶ probe            登記素材、抽辨識音訊
+素材 ─▶ probe            登記素材、抽辨識音訊（長錄影可只切出要用的段落）
      ─▶ transcribe       Breeze-ASR／whisper（faster-whisper，CPU）→ 字級時間戳
      ─▶ build_transcript 斷句、繁體化、編句子 ID → transcript.md
-     ─▶ audio_check      判斷收音品質 →（可選）denoise：DeepFilterNet3，只作用在成片
      ─▶ Claude 校稿      corrections-*.json
      ─▶ Claude 剪輯規劃  edl.json：保留哪些句子、章節、字卡、空鏡、配樂
      ─▶ validate_edl     檢查 → 剪輯腳本.md
      ─▶ cards            HTML 模板 → 無頭瀏覽器 → PNG
      ─▶ captions         依標點斷行、對到成片時間
-     ─▶ render           逐段編碼 → 串接 → 音訊另外處理 → 燒字幕 → final.mp4
+     ─▶ render           各素材降噪與音量對齊 → 逐段編碼 → 串接 → 混音 → 燒字幕 → final.mp4
+     ─▶ qc               影音同步、響度、配樂音量、字幕、切點 → 畫面總覽圖
 ```
 
 核心原則：**Claude 負責判斷，程式負責執行**。Claude 只引用句子 ID，不寫秒數。詳見 `SKILL.md`。
@@ -35,7 +35,7 @@
 
 ```
 .claude/skills/video-autoedit/
-├── SKILL.md          skill 主體：流程、校稿格式、品質檢查、踩過的坑
+├── SKILL.md          skill 主體：流程、校稿、素材處理、品質檢查
 ├── scripts/          所有確定性的工作
 ├── references/       EDL 規格、導演準則、字卡模板寫法
 └── assets/           共用字卡模板、合成的片頭／章節／片尾音效
@@ -47,7 +47,6 @@ output/               成品                         （不進版控）
 
 ## 已知限制
 
-- 配樂只能掛在字卡上，整段鋪底的背景音樂與講話時自動壓低（ducking）還沒做。
 - 辨識只走 CPU（約 1 倍即時）。GPU 方案只給句級時間戳，這套流程需要字級時間戳。
 - 剪輯單位是句子，加上自動刪長停頓；字級剪除（刪「嗯、那個」）尚未實作。
 - 多機位同步、說話者分離尚未實作。

@@ -3,18 +3,24 @@
 用法（在專案根目錄執行）:
     python transcribe.py --job jobs/<job> --model breeze-25
     python transcribe.py --job jobs/<job> --model breeze-26 --prompt "人名 地名 專有名詞"
+    python transcribe.py --job jobs/<job> --model large-v3 --sources A003 --window 60 80   # 交叉比對一小段
 
 產生 <job>/words/<ID>.<model>.json：
     {"source", "model", "segments": [{"start", "end", "text", "words": [{"start", "end", "word", "prob"}]}]}
+
+--window 只辨識那一段並印出文字，不寫檔：聽不清楚的關鍵句用第二個模型比對時用。
 
 引擎是 faster-whisper（CPU int8）。模型放在 <models-dir>/<model>-ct2/，由 setup_models.py 準備。
 """
 import argparse
 import json
 import os
+import subprocess
 import sys
 import time
 from pathlib import Path
+
+import numpy as np
 
 BASE_PROMPT = "以下是台灣人的中文對話逐字稿，使用繁體中文與全形標點。"
 
@@ -27,6 +33,8 @@ def main() -> None:
     parser.add_argument("--prompt", default="", help="專有名詞或主題提示，會接在預設提示後面")
     parser.add_argument("--language", default="zh")
     parser.add_argument("--sources", nargs="*", help="只辨識這些素材代號（預設全部）")
+    parser.add_argument("--window", nargs=2, type=float, metavar=("START", "END"),
+                        help="只辨識這段秒數並印出來（不寫檔），用來交叉比對")
     parser.add_argument("--threads", type=int, default=os.cpu_count() or 4)
     parser.add_argument("--no-vad", action="store_true",
                         help="直接關掉語音活動偵測（殘響很重的現場收音有時會被 VAD 整段濾掉）")
@@ -44,12 +52,27 @@ def main() -> None:
     for src in sources:
         if "asr_audio" not in src or (args.sources and src["id"] not in args.sources):
             continue
+        audio = str(args.job / src["asr_audio"])
+        if args.window:
+            a, b = args.window
+            raw = subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-ss", str(a), "-to", str(b),
+                                  "-i", audio, "-f", "f32le", "-ac", "1", "-ar", "16000", "-"],
+                                 capture_output=True, check=True).stdout
+            # 短片段不過 VAD、不給前文，免得模型「補完」出不存在的字
+            segments, _ = model.transcribe(np.frombuffer(raw, dtype=np.float32), language=args.language,
+                                           beam_size=5, vad_filter=False, condition_on_previous_text=False,
+                                           initial_prompt=prompt)
+            for seg in segments:
+                print(f"[{src['id']} {args.model}] {a + seg.start:7.2f}～{a + seg.end:7.2f}  {seg.text.strip()}",
+                      flush=True)
+            continue
+
         out = out_dir / f"{src['id']}.{args.model}.json"
         t0 = time.time()
 
         def run(vad: bool):
             segments, info = model.transcribe(
-                str(args.job / src["asr_audio"]),
+                audio,
                 language=args.language,
                 beam_size=5,
                 vad_filter=vad,
