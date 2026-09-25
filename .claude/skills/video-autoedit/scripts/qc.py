@@ -4,8 +4,8 @@
     python qc.py --job jobs/<job>
 
 檢查規格、時間戳連續性、影音同步（硬切點有沒有隨片長漂移）、響度、配樂音量、字幕、鏡頭長度、
-切點（有沒有切到字尾、刪停頓有沒有刪到聲音），並把每個疊加字卡、全畫面字卡與幾個取樣點
-的實際畫面拼成 <job>/qc/overview.png——人名條是不是對的人、字幕與面板有沒有擋到臉，一定要打開看。
+切點（有沒有切到字尾、刪停頓有沒有刪到聲音），並把每個疊加字卡、全畫面字卡、推鏡片段與幾個取樣點
+的實際畫面拼成 <job>/qc/overview.png——人名條是不是對的人、字幕與面板有沒有擋到臉、推鏡有沒有裁到人或字，一定要打開看。
 """
 import argparse
 import json
@@ -192,10 +192,19 @@ def main() -> None:
     report(not removed, f"刪掉的停頓裡有明顯聲音：{len(removed)} 處" + ("（" + "；".join(removed[:4]) + "；"
            "可能刪到很輕的字，該段設 tighten: false）" if removed else ""))
 
-    # ── 畫面：每個疊加字卡、每張全畫面字卡、再平均取幾格 ──
+    # ── 畫面：每個疊加字卡、每張全畫面字卡、每個推鏡片段，再平均取幾格 ──
     marks = [((o["start"] + min(1.5, (o["end"] - o["start"]) / 2)), f"疊加 {o['type']} {o['fields'].get('name', '')}")
              for o in tl["overlays"]]
     marks += [((p["out_start"] + p["out_end"]) / 2, f"字卡 item{p['item']}") for p in pieces if p["type"] == "card"]
+    # 推鏡會裁掉畫面四周：每個有推鏡的片段至少取一格，才看得出有沒有裁到人或字
+    zoomed = {}
+    for p in pieces:
+        if p["type"] == "clip" and p.get("zoom"):
+            zoomed.setdefault(p["item"], []).append(p)
+    for ps in zoomed.values():
+        if not any(q["out_start"] <= t <= q["out_end"] for q in ps for t, _ in marks):
+            q = max(ps, key=lambda q: q["out_end"] - q["out_start"])
+            marks.append(((q["out_start"] + q["out_end"]) / 2, f"推鏡 {q['source']}"))
     total = tl["duration"]
     marks += [(t, "取樣") for t in (total * (k + 0.5) / 8 for k in range(8))
               if all(abs(t - m) > 3 for m, _ in marks)]

@@ -1,7 +1,7 @@
 """把一批靜態圖片（照片、投影片）做成一支空鏡素材：每張固定秒數，輪流緩慢推近／拉遠。
 
 用法（在專案根目錄執行）:
-    python slideshow.py samples/投影片/ --out jobs/<job>/img/slides.mp4 [--seconds 8] [--size 1920x1080]
+    python slideshow.py samples/投影片/ --out jobs/<job>/img/slides.mp4 [--seconds 8] [--size 2560x1440]
     python probe.py 訪談.mp4 jobs/<job>/img/slides.mp4 --job jobs/<job>     # 再登記成空鏡素材
 
 會印出每張圖在影片裡的起訖秒數（也寫成 slides.json）。EDL 的 broll `in` 從這張表挑，
@@ -42,7 +42,7 @@ def main() -> None:
     parser.add_argument("images", nargs="+", type=Path, help="圖片檔或資料夾（依檔名的自然順序）")
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--seconds", type=float, default=8.0, help="每張停留秒數")
-    parser.add_argument("--size", default="1920x1080")
+    parser.add_argument("--size", default="2560x1440", help="與 edl.json 的輸出解析度相同")
     parser.add_argument("--fps", type=int, default=30)
     parser.add_argument("--zoom", type=float, default=0.085, help="推近／拉遠的幅度（0.085 = 8.5%%）")
     parser.add_argument("--mode", choices=["auto", "whole", "crop"], default="auto",
