@@ -342,23 +342,39 @@ def map_time(pieces: list, source: str, t: float):
     return None
 
 
+def encoder_works(name: str) -> bool:
+    """實際編 0.2 秒試試看這個編碼器在這台電腦能不能用。"""
+    r = subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "lavfi",
+                        "-i", "color=black:s=256x256:r=30:d=0.2", "-c:v", name,
+                        "-pix_fmt", "yuv420p", "-f", "null", "-"], capture_output=True)
+    return r.returncode == 0
+
+
 def gpu_encoder(codec: str = "h264", qp: int = 18) -> list:
-    """顯卡編碼器（AMD AMF / NVIDIA NVENC / Intel QSV）；沒有就回傳空的。qp 越小畫質越好。"""
-    if not hasattr(gpu_encoder, "avail"):
-        gpu_encoder.avail = subprocess.run(["ffmpeg", "-hide_banner", "-encoders"],
-                                           capture_output=True, text=True).stdout
-    avail = gpu_encoder.avail
+    """顯卡編碼器（Apple VideoToolbox / AMD AMF / NVIDIA NVENC / Intel QSV）；都不能用就回傳空的。
+
+    ffmpeg -encoders 只代表「有編進去」，不代表這台電腦有那張顯卡。Windows 版 ffmpeg 通常
+    AMF、NVENC、QSV 全都有，只看清單會在 Intel／NVIDIA 電腦上選到 AMF，渲染時才失敗。
+    所以每個候選都實際試編一次，第一個成功的才用（結果會快取）。
+    """
+    cache = gpu_encoder.__dict__.setdefault("cache", {})
+    if codec not in cache:
+        listed = subprocess.run(["ffmpeg", "-hide_banner", "-encoders"],
+                                capture_output=True, text=True).stdout
+        cands = [f"{codec}_{hw}" for hw in ("videotoolbox", "amf", "nvenc", "qsv")]
+        cache[codec] = next((c for c in cands if c in listed and encoder_works(c)), None)
+    name = cache[codec]
+    if not name:
+        return []
     tag = ["-tag:v", "hvc1"] if codec == "hevc" else []   # hvc1：YouTube／QuickTime 相容
-    if f"{codec}_videotoolbox" in avail:                  # Apple 晶片（未在 AMD 機器上驗證過）
-        return ["-c:v", f"{codec}_videotoolbox", "-q:v", str(max(1, min(100, round(100 - qp * 1.5)))), *tag]
-    if f"{codec}_amf" in avail:
-        return ["-c:v", f"{codec}_amf", "-usage", "transcoding", "-quality", "quality",
+    if name.endswith("_videotoolbox"):                     # 參數尚未在 Mac 上實測
+        return ["-c:v", name, "-q:v", str(max(1, min(100, round(100 - qp * 1.5)))), *tag]
+    if name.endswith("_amf"):
+        return ["-c:v", name, "-usage", "transcoding", "-quality", "quality",
                 "-rc", "cqp", "-qp_i", str(qp), "-qp_p", str(qp), "-qp_b", str(qp), *tag]
-    if f"{codec}_nvenc" in avail:
-        return ["-c:v", f"{codec}_nvenc", "-preset", "p5", "-rc", "constqp", "-qp", str(qp), *tag]
-    if f"{codec}_qsv" in avail:
-        return ["-c:v", f"{codec}_qsv", "-global_quality", str(qp), *tag]
-    return []
+    if name.endswith("_nvenc"):                            # 參數尚未在 NVIDIA 顯卡上實測
+        return ["-c:v", name, "-preset", "p5", "-rc", "constqp", "-qp", str(qp), *tag]
+    return ["-c:v", name, "-global_quality", str(qp), *tag]   # QSV，參數尚未在 Intel 上實測
 
 
 def piece_cmd(p: dict, src: dict, out: dict, path: Path, job: Path, gpu: bool = True) -> list:

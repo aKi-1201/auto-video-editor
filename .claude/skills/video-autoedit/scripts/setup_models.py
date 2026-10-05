@@ -3,6 +3,7 @@
 用法（在專案根目錄執行）:
     python setup_models.py large-v3 breeze-25 breeze-26
     python setup_models.py breeze-26 --models-dir D:/models
+    python setup_models.py breeze-25 --quantization int8   # 檔案小一半，準確度相當
 
 模型會放在 <models-dir>/<名稱>-ct2/。Breeze 系列需要 torch 與 transformers 才能轉檔：
     pip install torch --index-url https://download.pytorch.org/whl/cpu
@@ -37,7 +38,7 @@ def download(repo: str, dest: Path, patterns=None) -> Path:
     return dest
 
 
-def convert(src: Path, out: Path) -> None:
+def convert(src: Path, out: Path, quantization: str = "float16") -> None:
     import ctranslate2
     from transformers import WhisperTokenizerFast
 
@@ -49,7 +50,7 @@ def convert(src: Path, out: Path) -> None:
     converter = ctranslate2.converters.TransformersConverter(
         str(src), copy_files=copy_files, load_as_float16=True
     )
-    converter.convert(str(out), quantization="float16", force=True)
+    converter.convert(str(out), quantization=quantization, force=True)
 
 
 def main() -> None:
@@ -57,6 +58,9 @@ def main() -> None:
     parser.add_argument("names", nargs="+", choices=sorted(MODELS))
     parser.add_argument("--models-dir", type=Path, default=default_models_dir())
     parser.add_argument("--keep-hf", action="store_true", help="轉檔後保留原始 Hugging Face 權重")
+    parser.add_argument("--quantization", choices=["float16", "int8"], default="float16",
+                        help="Breeze 系列的存檔精度。辨識本來就用 int8 計算，存 int8 檔案小一半、準確度相當"
+                             "（逐字結果會有少許不同），但之後就不能改用更高精度計算。large-v3 是現成檔案，不受影響")
     args = parser.parse_args()
 
     for name in args.names:
@@ -69,7 +73,7 @@ def main() -> None:
             download(repo, out)
             continue
         hf_dir = download(repo, args.models_dir / "hf" / name, HF_FILES)
-        convert(hf_dir, out)
+        convert(hf_dir, out, args.quantization)
         if not args.keep_hf:
             shutil.rmtree(hf_dir)
         print(f"{name}: 完成", flush=True)

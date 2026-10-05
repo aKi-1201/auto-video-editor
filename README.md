@@ -26,7 +26,8 @@
 ## 需求
 
 - Python 3.12、ffmpeg（含 libass）、Chrome／Edge／Chromium、思源黑體與宋體
-- 辨識模型用 `setup_models.py` 下載（Breeze-ASR-25／26、whisper large-v3，各約 3 GB）
+- 辨識模型用 `setup_models.py` 下載（Breeze-ASR-25／26、whisper large-v3，各約 3 GB，int8 約 1.5 GB）；
+  預設放在 `models/`，可用環境變數 `AUTOEDIT_MODELS` 改到其他位置（例如 NAS）
 - 顯卡編碼可選：AMD AMF、NVIDIA NVENC、Intel QSV、Apple VideoToolbox（沒有就用 CPU）
 
 安裝步驟見 `.claude/skills/video-autoedit/SKILL.md` 的「一次性設定」。

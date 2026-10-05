@@ -43,8 +43,12 @@ def main() -> None:
     from faster_whisper import WhisperModel
 
     sources = json.loads((args.job / "sources.json").read_text(encoding="utf-8"))["sources"]
-    model = WhisperModel(str(args.models_dir / f"{args.model}-ct2"), device="cpu",
-                         compute_type="int8", cpu_threads=args.threads)
+    model_dir = args.models_dir / f"{args.model}-ct2"
+    if not (model_dir / "model.bin").exists():
+        # 不先擋下來的話，faster-whisper 會把路徑當成 Hugging Face 的 repo 名稱去下載，錯誤很難懂
+        sys.exit(f"找不到模型 {model_dir.resolve()}\n"
+                 f"請先執行 setup_models.py {args.model}，或設定環境變數 AUTOEDIT_MODELS 指向模型所在的資料夾")
+    model = WhisperModel(str(model_dir), device="cpu", compute_type="int8", cpu_threads=args.threads)
     prompt = f"{BASE_PROMPT}{args.prompt}"
     out_dir = args.job / "words"
     out_dir.mkdir(exist_ok=True)
