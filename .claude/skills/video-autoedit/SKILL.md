@@ -32,8 +32,8 @@ $PY S/make_stings.py                              # 合成片頭／章節／片�
 
 **模型位置**：預設是專案根目錄的 `models/<名稱>-ct2/`。放在別處（外接硬碟、NAS 給多台共用）就設
 環境變數 `AUTOEDIT_MODELS` 指向那個資料夾，單次也可以加 `--models-dir`。轉好的資料夾可以直接複製到
-別台，不必裝 torch。只想裝一個就裝 `breeze-25`；`setup_models.py --quantization int8` 存檔小一半、
-準確度相當，但之後就不能改用更高精度計算。
+別台，不必裝 torch。只想裝一個就裝 `breeze-25`。`setup_models.py --quantization int8` 存檔小一半：
+breeze-25、large-v3 準確度相當；breeze-26 在吵雜台語素材上約差 2 個百分點，維持 float16。
 
 字型目錄、瀏覽器、顯卡編碼器（AMF／NVENC／QSV／VideoToolbox）都會自動偵測；語音辨識一律走 CPU。
 硬體編碼器在各平台有各自的毛病，流程最後的 `qc.py` 會檢查時間戳與影音同步。

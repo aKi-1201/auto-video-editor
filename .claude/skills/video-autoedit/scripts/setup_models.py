@@ -24,6 +24,8 @@ MODELS = {
     "breeze-25": ("MediaTek-Research/Breeze-ASR-25", False),
     "breeze-26": ("MediaTek-Research/Breeze-ASR-26", False),
 }
+# 現成的 CTranslate2 版只有 float16；要 int8 就從原始權重轉
+ORIGINALS = {"large-v3": "openai/whisper-large-v3"}
 
 
 def default_models_dir() -> Path:
@@ -34,7 +36,8 @@ def download(repo: str, dest: Path, patterns=None) -> Path:
     from huggingface_hub import snapshot_download
 
     print(f"下載 {repo} → {dest}", flush=True)
-    snapshot_download(repo_id=repo, local_dir=dest, allow_patterns=patterns)
+    # whisper 的原始 repo 同時放了 fp16 與 fp32 兩份權重，只要 fp16 那份
+    snapshot_download(repo_id=repo, local_dir=dest, allow_patterns=patterns, ignore_patterns=["*fp32*"])
     return dest
 
 
@@ -59,12 +62,14 @@ def main() -> None:
     parser.add_argument("--models-dir", type=Path, default=default_models_dir())
     parser.add_argument("--keep-hf", action="store_true", help="轉檔後保留原始 Hugging Face 權重")
     parser.add_argument("--quantization", choices=["float16", "int8"], default="float16",
-                        help="Breeze 系列的存檔精度。辨識本來就用 int8 計算，存 int8 檔案小一半、準確度相當"
-                             "（逐字結果會有少許不同），但之後就不能改用更高精度計算。large-v3 是現成檔案，不受影響")
+                        help="存檔精度。辨識本來就用 int8 計算，存 int8 檔案小一半；breeze-25、large-v3 準確度相當，"
+                             "breeze-26 在吵雜台語素材上約差 2 個百分點，建議維持 float16")
     args = parser.parse_args()
 
     for name in args.names:
         repo, is_ct2 = MODELS[name]
+        if is_ct2 and args.quantization != "float16":
+            repo, is_ct2 = ORIGINALS[name], False
         out = args.models_dir / f"{name}-ct2"
         if (out / "model.bin").exists():
             print(f"{name}: 已存在，略過", flush=True)
