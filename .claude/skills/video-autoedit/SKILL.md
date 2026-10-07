@@ -107,7 +107,7 @@ breeze-25、large-v3 準確度相當；breeze-26 在吵雜台語素材上約差 
   **每支影片都可以設計專用模板**，放在 `jobs/<job>/templates/`（寫法見 `references/cards.md`）。
 - 疊加面板要避開人臉；設了 `plate_width` 字幕會自動讓開。
 - 配樂依序找 `<job>/audio/` → 專案的 `music/` → `assets/audio/`；`music/index.tsv` 列出曲庫的類型與情境，
-  依影片情緒挑，EDL 寫曲名即可。
+  依影片情緒挑，EDL 寫曲名即可。索引可能列了沒下載的曲子，只挑 `music/` 裡確實有檔案的。
   - 字卡音效（card 的 `music`）比對白低 2～4 dB 最自然。
   - 整段鋪底用 `bgm`（講話時可自動壓低），比人聲低約 15 dB。挑沒有人聲、起伏小、起音少的曲子。
 
