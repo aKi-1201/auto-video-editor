@@ -42,7 +42,7 @@
 └── assets/           共用字卡模板、合成的片頭／章節／片尾音效
 jobs/<job>/           每支影片的工作目錄           （不進版控）
 samples/  models/     素材、辨識模型               （不進版控）
-music/                自備曲庫與 index.tsv         （不進版控）
+music/                自備曲庫（音檔不進版控，只收 index.tsv 曲目表）
 output/               成品                         （不進版控）
 ```
 
